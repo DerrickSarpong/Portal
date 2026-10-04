@@ -1,0 +1,265 @@
+# Portal
+
+A Windows equivalent of the macOS **Blink** utility — a tray-resident monitor
+and manager for local development servers and Android emulators. Portal
+continuously maps listening TCP ports to their owning processes, detects the
+framework behind each server, resolves the real project name, and lets you
+open, restart, boot and stop everything from a compact widget-style window or
+the system tray.
+
+---
+
+## 1. Architectural Decisions
+
+### 1.1 Tech stack
+
+| Layer            | Choice                                    | Why |
+|------------------|-------------------------------------------|-----|
+| Backend          | Rust + `sysinfo` + `windows` crate         | `sysinfo` for process-tree traversal and killing; the `windows` crate for native Win32 calls (`GetExtendedTcpTable`, PEB reads, `CreateProcessW`, registry). |
+| GUI              | Tauri v2 + React + TypeScript + Tailwind   | Native-feeling, frameless widget window at ~10 MB memory footprint; a full Electron app would be 10× heavier for the same UI. |
+| IPC              | Tauri commands + events                    | Typed Rust commands (`Result<T, String>`) invoked from React; a background poller emits a unified `snapshot` event every 4 s. |
+| Async runtime    | tokio (via `tauri::async_runtime`)         | Async Android CLI commands with hard timeouts (`tokio::time::timeout`) and kill-on-drop. |
+| Process launching| `std::process` / `CreateProcessW`          | `CREATE_NO_WINDOW` so background commands never spawn rogue console windows. |
+
+### 1.2 Project layout
+
+```
+Portal/
+├── index.html                  # Vite entry
+├── package.json                # React + TS + Tailwind + @tauri-apps/cli
+├── vite.config.ts              # Fixed dev port 1420 (Tauri requirement)
+├── tsconfig.json, tailwind.config.js, postcss.config.js
+├── src/
+│   ├── main.tsx                # React bootstrap
+│   ├── App.tsx                 # Widget UI: header, tabs, rows, actions
+│   ├── types.ts                # Mirrors the Rust Snapshot structs (camelCase)
+│   └── index.css               # Tailwind directives
+├── src-tauri/
+│   ├── Cargo.toml              # tauri 2 (tray-icon), sysinfo, windows 0.58, tokio
+│   ├── tauri.conf.json         # 420×650 frameless window, bundle targets
+│   ├── capabilities/default.json
+│   ├── icons/icon.ico
+│   └── src/
+│       ├── main.rs             # Builder, tray + menu, 4 s poll loop, window events
+│       ├── commands.rs         # IPC surface (validated inputs, Result errors)
+│       ├── snapshot.rs         # Unified snapshot builder (servers + emulators)
+│       ├── ports.rs            # Win32 GetExtendedTcpTable scanner (IPv4 + IPv6)
+│       ├── procs.rs            # sysinfo process table + PEB cwd/cmdline reads
+│       ├── detect.rs           # Framework heuristics + project-name resolution
+│       ├── android.rs          # SDK discovery, AVD listing/status, launch/kill
+│       ├── processctl.rs       # Root finding, tree kill, hidden relaunch
+│       ├── regsetup.rs         # "Start at Login" via HKCU\...\Run
+│       └── util.rs             # wide-string / path helpers
+└── Portal                      # This document
+```
+
+### 1.3 Key decisions and their rationale
+
+**Port scanning — `GetExtendedTcpTable`, not socket probing.**
+Portal queries `TCP_TABLE_OWNER_PID_LISTENER` (both `AF_INET` and `AF_INET6`).
+This returns every socket in the LISTEN state *together with the owning PID*,
+needs no elevation, and costs microseconds. IPv6 is included because Node dev
+servers frequently bind `::` / `::1`, which never appear in the IPv4 table.
+Ports present in both tables are deduplicated (IPv4 owner wins); `dwLocalPort`
+is stored in network byte order and converted with `u16::from_be`.
+
+**Process identity — `sysinfo` plus direct PEB reads.**
+`sysinfo` gives the process table, parent PIDs, image paths, command lines and
+kill support. However, `sysinfo` does not expose the *working directory* on
+Windows, and Portal needs it for project-name resolution and framework
+detection. Portal therefore reads cwd — and the exact command line — straight
+from the target process PEB via ntdll's `NtQueryInformationProcess`
+(`ProcessBasicInformation` → PEB+0x20 → `ProcessParameters` → offset 0x38 for
+`CurrentDirectory.DosPath`, offset 0x70 for `CommandLine`). This works for
+processes running as the same user and requires **no elevation**; failures
+(other users, protected processes) degrade gracefully to `None`.
+
+**Framework detection — three passes.**
+1. *Binary identity* from the image file name / process name: `adb*` → ADB,
+   `com.docker.backend.exe` / `docker-proxy.exe` / `vpnkit` / `wslrelay.exe` /
+   `wslhost.exe` → Docker/WSL, `qemu-system-*` → Android emulator. These never
+   false-positive on user code paths.
+2. *Command-line evidence* with **word-boundary keyword matching** (`next`,
+   `vite`, `react-scripts`, `nuxt`, `vue`, `express`, `streamlit`, `mlflow`,
+   `uvicorn`, `fastapi`) so `"invite"` never matches `vite` and
+   `"nextjs-proxy"` never matches `next`.
+3. *Dependency evidence*: for Node processes whose command line is ambiguous
+   (`node server.js`), `package.json` dependencies (`next`, `vue`, `express`,
+   …) identify the framework. `vite` is a bundler, not a framework — its
+   flavor (Vue vs React vs plain Vite) is picked from the project's
+   dependencies.
+
+Every runtime gets a unique brand color (Next.js, React, Vue, Vite, Express,
+FastAPI, Streamlit, MLflow, Docker/WSL, ADB, Android emulator, Node, Python,
+other). Next.js and Express brand black would be invisible on the dark UI, so
+they are rendered as light grays.
+
+**Project name — real project identity, not folder names.**
+For the working directory of each listening process Portal reads
+`package.json` (via serde_json; npm scopes stripped), then `pyproject.toml`
+(`name = "…"` inside `[project]`), then `uv.lock` (first `name = "…"` entry),
+falling back to the directory name when none exist. Results are cached per
+working directory per poll cycle.
+
+**Restart logic — walk up, kill down, relaunch exactly.**
+Frameworks spawn child processes (`pwsh` → `cmd /c` → `node npm-cli.js` →
+`node <server>`), so killing the listening PID alone is not enough.
+
+- *Root discovery*: Portal walks up the Windows parent chain (via sysinfo)
+  from the listening PID. The walk stops at PID 0/4, missing parents,
+  non-runner binaries (terminals, editors, anything unfamiliar), shells
+  without a real command invocation (interactive `pwsh.exe` — so the walk
+  never escapes into the user's terminal), or a project-directory change
+  (never crosses projects). The chain is enriched with PEB cwd/cmdline before
+  the walk so anchors like `cmd /d /s /c "npm run dev"` are recognized.
+- *Tree kill*: a BFS over parent→children edges collects every descendant;
+  they are terminated deepest-first (`TerminateProcess`) so parents cannot
+  respawn children mid-flight. Portal refuses to kill PIDs ≤ 4, itself, or
+  known system processes.
+- *Relaunch*: the root's captured command line is reproduced byte-for-byte via
+  `CreateProcessW` with `CREATE_NO_WINDOW`, in the captured working directory.
+  The child is fully detached (all handles dropped), so servers keep running
+  in the background exactly like a Blink-managed process.
+
+**Tray & window.**
+Tauri v2 with the `tray-icon` feature: a 420×650 frameless (`decorations:
+false`) widget window whose header doubles as the drag handle
+(`data-tauri-drag-region`). Dragging requires an explicit
+`core:window:allow-start-dragging` permission — it is *not* part of
+`core:window:default`, so without it the frameless window cannot be moved. Left-clicking the tray icon toggles window
+visibility; right-click opens the menu (Show/Hide · Start at Login check item ·
+Quit). Closing the window (✕ button or Alt+F4) hides to tray instead of
+quitting. "Start at Login" persists a quoted exe path under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (per-user, no elevation)
+through `RegSetValueExW` / `RegDeleteValueW`.
+
+**Android emulator management.**
+SDK discovery order: `ANDROID_HOME` → `ANDROID_SDK_ROOT` →
+`%LOCALAPPDATA%\Android\Sdk`, verified by the presence of
+`platform-tools\adb.exe` and `emulator\emulator.exe`. Available AVDs come from
+`emulator -list-avds` (cached ~15 s to keep the poll cheap). Running instances
+are matched to AVD profiles via `adb devices` (serials `emulator-5554`…) plus
+`adb -s <serial> emu avd name`; if adb itself is unusable, Portal falls back to
+scanning console ports 5554–5584. Status per device: `stopped`, `offline`,
+`unauthorized`, `booting` (adb attached but `sys.boot_completed` ≠ 1), or
+`ready`. Lifecycle actions: boot (`emulator -avd <name>`), cold boot
+(`-no-snapshot-load`), and graceful stop (`adb -s <serial> emu kill`). All CLI
+calls run with `CREATE_NO_WINDOW`, hard timeouts, and kill-on-drop. AVD names
+are validated (alphanumeric/`-`/`_`/`.`/space/parens) so a crafted name can
+never smuggle extra flags into the emulator invocation.
+
+**Performance.**
+The poll loop runs every 4 s on tokio's background runtime with
+`MissedTickBehavior::Delay`: one TCP-table query (µs), one sysinfo process
+refresh (~10–30 ms), PEB reads only for *unique listening* PIDs (µs each),
+three tiny CLI calls only when an Android SDK exists, and `emulator
+-list-avds` at most every ~15 s. Idle CPU stays far below 1%.
+
+**Security.**
+No elevation anywhere: the TCP tables, PEB reads (same-user only) and HKCU
+registry writes all work as a normal user. The IPC surface validates inputs —
+`open_url` accepts only localhost URLs, AVD names are character-restricted,
+emulator kills require `emulator-*` serials — and restart refuses system
+processes and Portal itself. The frontend CSP allows only self styles/scripts.
+
+**Error handling.**
+Every Win32 call is checked (`Result`/error codes with explicit messages);
+missing Android SDK environment variables surface a readable message in the
+Android tab instead of failing silently; a failed TCP scan is reported in the
+snapshot's `error` field; IPC commands return `Result<T, String>` so failures
+appear as toasts in the UI.
+
+---
+
+## 2. Setup Instructions
+
+### 2.1 Prerequisites
+
+- **Rust** (MSVC toolchain): <https://rustup.rs> — `x86_64-pc-windows-msvc`.
+- **MSVC Build Tools + Windows SDK** (linker & resource compiler). rustup
+  offers to install Visual Studio Build Tools; otherwise:
+  `winget install Microsoft.VisualStudio.2022.BuildTools`.
+- **Node.js ≥ 18** (npm).
+- Optional, for the Android tab: **Android SDK platform-tools + emulator**
+  (Android Studio → SDK Manager). Set `ANDROID_HOME`, or leave it in
+  `%LOCALAPPDATA%\Android\Sdk`.
+
+### 2.2 Install and run
+
+```powershell
+# from the project root
+npm install            # frontend dependencies
+npm run tauri dev      # dev build + hot-reload window
+```
+
+The first `dev` run compiles the Rust backend (~5–10 min once).
+
+### 2.3 Verify without the GUI (optional)
+
+```powershell
+cd src-tauri
+cargo check            # type-checks the whole Rust backend
+cd ..
+npm run build          # type-checks TS + produces dist/
+```
+
+---
+
+## 3. Deployment Steps
+
+### 3.1 Build installers
+
+```powershell
+npm run tauri build
+```
+
+Produces, under `src-tauri/target/release/bundle/`:
+
+- `nsis/Portal_0.1.0_x64-setup.exe` — user-level NSIS installer.
+- `msi/Portal_0.1.0_x64_en-US.msi` — MSI package.
+
+Both bundle the compiled `Portal.exe` with the embedded icon and frontend
+assets.
+
+### 3.2 Ship / install
+
+1. Run the NSIS or MSI installer on a target Windows 10/11 x64 machine (no
+   admin required for the NSIS user install).
+2. Launch Portal — the tray icon appears; the widget window opens centered.
+3. Toggle **Start at Login** (window footer checkbox or tray menu) — Portal
+   writes its quoted exe path to `HKCU\...\CurrentVersion\Run`, so it starts
+   with the user session on every login.
+4. Close (✕) or Alt+F4 merely hides the window to tray; **Quit Portal** from
+   the tray menu ends the app.
+
+### 3.3 Distribution notes
+
+- The installers are self-contained: WebView2 (the only system dependency) is
+  preinstalled on Windows 10/11 and the Tauri bundler bootstraps a download
+  otherwise.
+- Machines without an Android SDK see a readable notice in the Android tab;
+  everything else keeps working.
+- Portal needs no firewall prompts (it only reads system tables and spawns
+  local processes); servers it relaunches bind their own ports as before.
+
+---
+
+## 4. Usage
+
+- **Dev Servers tab** — every listening TCP port with its project name,
+  framework badge (brand color), port and PID. Two filter toggles (top right):
+  a **System** eye toggle hides/shows system-noise rows (svchost, lsass,
+  System-bound ports, …), and a **Servers only** toggle shows just the
+  dev-server rows (Next.js, React, Vite, Express, FastAPI, Streamlit, MLflow,
+  Node, Python) — while it is active the System toggle is dimmed as
+  not-applicable. Both choices persist between sessions and the hidden count
+  is shown on the System toggle. One-click:
+  🌐 opens `http://localhost:PORT` in the default browser; ↻ walks the process
+  tree, kills it and relaunches the captured command line in the captured
+  working directory.
+- **Android tab** — detected SDK path (or a setup hint), each AVD with its
+  live status badge, and ▶ boot / ⚡ cold boot / ■ stop actions.
+- **Tray** — left-click toggles the window; right-click menu offers Show/Hide,
+  Start at Login, and Quit. The tooltip shows the current listening-port count.
+- The window footer mirrors live state: Start-at-Login toggle and the last
+  snapshot time; snapshots refresh every 4 s.

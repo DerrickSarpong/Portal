@@ -47,6 +47,7 @@ fn main() {
             commands::get_snapshot,
             commands::open_url,
             commands::restart_server,
+            commands::kill_server,
             commands::launch_avd,
             commands::kill_avd,
             commands::get_start_at_login,

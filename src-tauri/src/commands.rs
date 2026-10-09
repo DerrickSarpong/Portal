@@ -43,6 +43,12 @@ pub async fn restart_server(pid: u32) -> Result<String, String> {
     processctl::restart_server(pid).await
 }
 
+/// Kills the whole process tree behind `pid` without relaunching it.
+#[tauri::command]
+pub async fn kill_server(pid: u32) -> Result<String, String> {
+    processctl::kill_server(pid).await
+}
+
 /// Boots an AVD in the background (`cold` = fresh boot, no saved snapshot).
 #[tauri::command]
 pub async fn launch_avd(name: String, cold: bool) -> Result<(), String> {

@@ -303,3 +303,40 @@ pub async fn restart_server(leaf_pid: u32) -> Result<String, String> {
     let where_ = cwd.unwrap_or_else(|| "its original directory".to_string());
     Ok(format!("Restarted {label}: killed {killed} process(es), relaunched in {where_}"))
 }
+
+/// Kills the server behind `leaf_pid`: walks to the root of its launch chain
+/// and terminates the whole tree (deepest first), without relaunching.
+pub async fn kill_server(leaf_pid: u32) -> Result<String, String> {
+    let mut procs = crate::procs::snapshot_processes();
+
+    // Same chain enrichment as restart so root discovery sees PEB cwd data.
+    let mut chain: Vec<u32> = Vec::new();
+    let mut cursor = Some(leaf_pid);
+    while let Some(pid) = cursor {
+        chain.push(pid);
+        cursor = procs.get(&pid).and_then(|p| p.parent_pid);
+        if chain.len() > 64 {
+            break; // paranoia: malformed process cycles
+        }
+    }
+    crate::procs::enrich_with_peb(&mut procs, &chain);
+
+    let root_pid = find_root(leaf_pid, &procs);
+    let Some(root) = procs.get(&root_pid) else {
+        return Err("root process not found (already exited?)".into());
+    };
+    // Safety rails: never kill Portal itself or a system process.
+    if root_pid == std::process::id() {
+        return Err("refusing to kill Portal itself".into());
+    }
+    if is_system_image(&root.exe_name()) {
+        return Err(format!("refusing to kill system process '{}'", root.exe_name()));
+    }
+    let label = root.exe_name();
+
+    let killed = kill_tree(root_pid, &procs);
+    if killed == 0 {
+        return Err(format!("failed to terminate {label} (access denied?)"));
+    }
+    Ok(format!("Killed {label} and {} process(es)", killed - 1))
+}

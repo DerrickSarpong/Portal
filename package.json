@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "description": "A portal for all your needs.",
+  "author": {
+    "name": "Derrick Sarpong",
+    "email": "derrick.sarpong.ds@gmail.com"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

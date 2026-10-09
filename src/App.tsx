@@ -53,7 +53,7 @@ export default function App() {
       .then((s) => {
         if (!disposed) setSnap(s);
       })
-      .catch(() => {});
+      .catch(() => { });
     listen<Snapshot>("snapshot", (e) => {
       if (!disposed) setSnap(e.payload);
     }).then((u) => {
@@ -63,7 +63,7 @@ export default function App() {
       .then((v) => {
         if (!disposed) setAutostart(v);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       disposed = true;
@@ -101,6 +101,11 @@ export default function App() {
   const restartServer = (s: ServerEntry) =>
     run(`restart:${s.pid}`, `Restarted ${s.project}`, () =>
       invoke("restart_server", { pid: s.pid }),
+    );
+
+  const killServer = (s: ServerEntry) =>
+    run(`kill:${s.pid}`, `Killed ${s.project}`, () =>
+      invoke("kill_server", { pid: s.pid }),
     );
 
   const launchAvd = (a: AvdEntry, cold: boolean) =>
@@ -169,10 +174,10 @@ export default function App() {
           Portal
         </span>
         <span data-tauri-drag-region className="text-[11px] text-zinc-500">
-          {allServers.length} {allServers.length === 1 ? "port" : "ports"}
+          {servers.length} {servers.length === 1 ? "active port" : "active ports"}
         </span>
         <button
-          onClick={() => invoke("hide_window").catch(() => {})}
+          onClick={() => invoke("hide_window").catch(() => { })}
           title="Hide to tray"
           className="rounded px-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
         >
@@ -207,13 +212,12 @@ export default function App() {
                     ? "System noise is shown — click to hide"
                     : "System noise is hidden — click to show"
               }
-              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] transition-colors ${
-                serversOnly
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] transition-colors ${serversOnly
                   ? "cursor-not-allowed text-zinc-600 opacity-50"
                   : showSystem
                     ? "text-zinc-500 hover:text-zinc-300"
                     : "text-zinc-200 hover:text-zinc-50"
-              }`}
+                }`}
             >
               {showSystem ? <EyeIcon /> : <EyeOffIcon />}
               <span>
@@ -228,11 +232,10 @@ export default function App() {
                   ? "Showing only dev servers — click to show everything"
                   : "Show only dev servers"
               }
-              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] transition-colors ${
-                serversOnly
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] transition-colors ${serversOnly
                   ? "bg-zinc-800 text-zinc-100"
                   : "text-zinc-500 hover:text-zinc-300"
-              }`}
+                }`}
             >
               <ServerIcon />
               Servers only
@@ -296,6 +299,16 @@ export default function App() {
                       <RestartIcon />
                     </IconButton>
                   )}
+                  {s.kind !== "system" && (
+                    <IconButton
+                      title={`Kill ${s.project}`}
+                      busy={busy === `kill:${s.pid}`}
+                      danger
+                      onClick={() => killServer(s)}
+                    >
+                      <StopIcon />
+                    </IconButton>
+                  )}
                 </li>
               ))}
             </ul>
@@ -331,9 +344,8 @@ export default function App() {
                       </div>
                     </div>
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${
-                        AVD_STATUS_STYLES[a.status] ?? AVD_STATUS_STYLES.stopped
-                      }`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${AVD_STATUS_STYLES[a.status] ?? AVD_STATUS_STYLES.stopped
+                        }`}
                     >
                       {a.status}
                     </span>
@@ -413,9 +425,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${
-        active ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-      }`}
+      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${active ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+        }`}
     >
       {label}
       {badge > 0 && (
@@ -430,11 +441,13 @@ function TabButton({
 function IconButton({
   title,
   busy,
+  danger,
   onClick,
   children,
 }: {
   title: string;
   busy: boolean;
+  danger?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -443,9 +456,8 @@ function IconButton({
       title={title}
       onClick={onClick}
       disabled={busy}
-      className={`shrink-0 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100 ${
-        busy ? "animate-pulse text-emerald-400" : ""
-      }`}
+      className={`shrink-0 rounded-md p-1.5 text-zinc-500 transition-colors ${danger ? "hover:bg-red-500/10 hover:text-red-400" : "hover:bg-zinc-800 hover:text-zinc-100"
+        } ${busy ? "animate-pulse text-emerald-400" : ""}`}
     >
       {children}
     </button>

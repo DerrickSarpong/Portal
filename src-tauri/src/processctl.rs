@@ -281,11 +281,13 @@ pub async fn restart_server(leaf_pid: u32) -> Result<String, String> {
     let Some(root) = procs.get(&root_pid) else {
         return Err("root process not found (already exited?)".into());
     };
-    // Safety rails: never restart Portal itself or a system process.
+    // Safety rails: never restart Portal itself or a Windows-critical process.
+    // Same cmd.exe / conhost.exe exemption as kill_server: a walked-to root
+    // with an explicit invocation is a legitimate dev launch.
     if root_pid == std::process::id() {
         return Err("refusing to restart Portal itself".into());
     }
-    if is_system_image(&root.exe_name()) {
+    if is_system_image(&root.exe_name()) && !(is_runner(root) && has_invocation(root)) {
         return Err(format!("refusing to restart system process '{}'", root.exe_name()));
     }
     let Some(relaunch_cmd) = root.cmdline.clone().or_else(|| root.exe.clone()) else {
@@ -325,11 +327,15 @@ pub async fn kill_server(leaf_pid: u32) -> Result<String, String> {
     let Some(root) = procs.get(&root_pid) else {
         return Err("root process not found (already exited?)".into());
     };
-    // Safety rails: never kill Portal itself or a system process.
+    // Safety rails: never kill Portal itself or a Windows-critical process.
+    // cmd.exe / conhost.exe are in the system list for ports-list filtering,
+    // but a root that survived find_root (runner + explicit invocation + same
+    // cwd) is a legitimate dev launch — npm spawns `cmd.exe /c npm.cmd run
+    // dev` — so exempt those.
     if root_pid == std::process::id() {
         return Err("refusing to kill Portal itself".into());
     }
-    if is_system_image(&root.exe_name()) {
+    if is_system_image(&root.exe_name()) && !(is_runner(root) && has_invocation(root)) {
         return Err(format!("refusing to kill system process '{}'", root.exe_name()));
     }
     let label = root.exe_name();

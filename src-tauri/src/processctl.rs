@@ -80,7 +80,12 @@ pub fn spawn_hidden_cmdline(cmdline: &str, cwd: Option<&Path>) -> Result<(), Str
 pub fn open_in_browser(url: &str) -> Result<(), String> {
     spawn_hidden(
         "cmd.exe",
-        &["/c".to_string(), "start".to_string(), "".to_string(), url.to_string()],
+        &[
+            "/c".to_string(),
+            "start".to_string(),
+            "".to_string(),
+            url.to_string(),
+        ],
         None,
     )
 }
@@ -88,11 +93,7 @@ pub fn open_in_browser(url: &str) -> Result<(), String> {
 /// Windows command-line quoting (MSVCRT rules: backslash runs before quotes
 /// are doubled, arguments with spaces are wrapped in quotes).
 fn quote(arg: &str) -> String {
-    if !arg.is_empty()
-        && !arg.contains(' ')
-        && !arg.contains('\t')
-        && !arg.contains('"')
-    {
+    if !arg.is_empty() && !arg.contains(' ') && !arg.contains('\t') && !arg.contains('"') {
         return arg.to_string();
     }
     let mut out = String::with_capacity(arg.len() + 2);
@@ -180,13 +181,36 @@ fn terminate_pid(pid: u32) -> bool {
 fn is_runner(info: &ProcessInfo) -> bool {
     matches!(
         info.exe_name().as_str(),
-        "cmd.exe" | "command.com" | "powershell.exe" | "pwsh.exe"
-            | "node.exe" | "npm.exe" | "npx.exe" | "pnpm.exe" | "yarn.exe" | "yarnpkg.exe"
-            | "bun.exe" | "deno.exe" | "tsx.exe"
-            | "python.exe" | "pythonw.exe" | "py.exe" | "uv.exe" | "uvicorn.exe"
-            | "gunicorn.exe" | "streamlit.exe" | "mlflow.exe" | "poetry.exe"
-            | "dotnet.exe" | "java.exe" | "javaw.exe" | "ruby.exe"
-            | "wt.exe" | "windowsterminal.exe" | "openconsole.exe" | "conhost.exe"
+        "cmd.exe"
+            | "command.com"
+            | "powershell.exe"
+            | "pwsh.exe"
+            | "node.exe"
+            | "npm.exe"
+            | "npx.exe"
+            | "pnpm.exe"
+            | "yarn.exe"
+            | "yarnpkg.exe"
+            | "bun.exe"
+            | "deno.exe"
+            | "tsx.exe"
+            | "python.exe"
+            | "pythonw.exe"
+            | "py.exe"
+            | "uv.exe"
+            | "uvicorn.exe"
+            | "gunicorn.exe"
+            | "streamlit.exe"
+            | "mlflow.exe"
+            | "poetry.exe"
+            | "dotnet.exe"
+            | "java.exe"
+            | "javaw.exe"
+            | "ruby.exe"
+            | "wt.exe"
+            | "windowsterminal.exe"
+            | "openconsole.exe"
+            | "conhost.exe"
     )
 }
 
@@ -194,12 +218,20 @@ fn is_runner(info: &ProcessInfo) -> bool {
 /// (bare `pwsh.exe`, terminal hosts) do not, so the walk stops at them instead
 /// of escaping into the user's terminal or editor.
 fn has_invocation(info: &ProcessInfo) -> bool {
-    let Some(cmd) = info.cmdline.as_deref() else { return false };
+    let Some(cmd) = info.cmdline.as_deref() else {
+        return false;
+    };
     let exe = info.exe_name();
     let shell = matches!(
         exe.as_str(),
-        "cmd.exe" | "powershell.exe" | "pwsh.exe" | "conhost.exe" | "wt.exe"
-            | "windowsterminal.exe" | "openconsole.exe" | "command.com"
+        "cmd.exe"
+            | "powershell.exe"
+            | "pwsh.exe"
+            | "conhost.exe"
+            | "wt.exe"
+            | "windowsterminal.exe"
+            | "openconsole.exe"
+            | "command.com"
     );
     let lower = cmd.to_lowercase();
     if shell {
@@ -239,7 +271,9 @@ pub fn find_root(leaf_pid: u32, procs: &HashMap<u32, ProcessInfo>) -> u32 {
         if ppid == 0 || ppid == 4 {
             break;
         }
-        let Some(parent) = procs.get(&ppid) else { break };
+        let Some(parent) = procs.get(&ppid) else {
+            break;
+        };
         if !is_runner(parent) || !has_invocation(parent) {
             break;
         }
@@ -288,7 +322,10 @@ pub async fn restart_server(leaf_pid: u32) -> Result<String, String> {
         return Err("refusing to restart Portal itself".into());
     }
     if is_system_image(&root.exe_name()) && !(is_runner(root) && has_invocation(root)) {
-        return Err(format!("refusing to restart system process '{}'", root.exe_name()));
+        return Err(format!(
+            "refusing to restart system process '{}'",
+            root.exe_name()
+        ));
     }
     let Some(relaunch_cmd) = root.cmdline.clone().or_else(|| root.exe.clone()) else {
         return Err("no command line captured for the root process".into());
@@ -303,7 +340,9 @@ pub async fn restart_server(leaf_pid: u32) -> Result<String, String> {
         .map_err(|e| format!("killed {killed} process(es) but relaunch failed: {e}"))?;
 
     let where_ = cwd.unwrap_or_else(|| "its original directory".to_string());
-    Ok(format!("Restarted {label}: killed {killed} process(es), relaunched in {where_}"))
+    Ok(format!(
+        "Restarted {label}: killed {killed} process(es), relaunched in {where_}"
+    ))
 }
 
 /// Kills the server behind `leaf_pid`: walks to the root of its launch chain
@@ -336,7 +375,10 @@ pub async fn kill_server(leaf_pid: u32) -> Result<String, String> {
         return Err("refusing to kill Portal itself".into());
     }
     if is_system_image(&root.exe_name()) && !(is_runner(root) && has_invocation(root)) {
-        return Err(format!("refusing to kill system process '{}'", root.exe_name()));
+        return Err(format!(
+            "refusing to kill system process '{}'",
+            root.exe_name()
+        ));
     }
     let label = root.exe_name();
 

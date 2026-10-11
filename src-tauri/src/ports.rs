@@ -73,7 +73,14 @@ fn v4_rows() -> Result<Vec<MIB_TCPROW_OWNER_PID>, String> {
 
     // First call with a null buffer: Windows reports the required table size.
     let err = unsafe {
-        GetExtendedTcpTable(None, &mut size, false, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0)
+        GetExtendedTcpTable(
+            None,
+            &mut size,
+            false,
+            AF_INET,
+            TCP_TABLE_OWNER_PID_LISTENER,
+            0,
+        )
     };
     if err != ERROR_INSUFFICIENT_BUFFER.0 {
         return Err(format!("size probe failed (error {err})"));

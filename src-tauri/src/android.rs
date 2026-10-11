@@ -184,9 +184,13 @@ pub fn launch_avd(sdk: &Sdk, name: &str, cold: bool) -> Result<(), String> {
 
 /// Gracefully terminates a running emulator: `adb -s <serial> emu kill`.
 pub async fn kill_avd(sdk: &Sdk, serial: &str) -> Result<(), String> {
-    run_tool(&sdk.adb, &["-s", serial, "emu", "kill"], Duration::from_secs(5))
-        .await
-        .map(|_| ())
+    run_tool(
+        &sdk.adb,
+        &["-s", serial, "emu", "kill"],
+        Duration::from_secs(5),
+    )
+    .await
+    .map(|_| ())
 }
 
 /// Builds the emulators portion of the snapshot: SDK discovery, AVD listing
@@ -197,7 +201,12 @@ pub async fn refresh_emulators(
 ) -> EmulatorsState {
     let sdk = match discover_sdk() {
         Ok(s) => s,
-        Err(e) => return EmulatorsState { sdk_error: Some(e), ..Default::default() },
+        Err(e) => {
+            return EmulatorsState {
+                sdk_error: Some(e),
+                ..Default::default()
+            }
+        }
     };
     let sdk_path = sdk.root().to_string_lossy().to_string();
 
@@ -206,9 +215,7 @@ pub async fn refresh_emulators(
     let console_ports: Vec<u16> = listen_ports
         .iter()
         .copied()
-        .filter(|p| {
-            *p >= EMULATOR_CONSOLE_MIN && *p <= EMULATOR_CONSOLE_MAX && p % 2 == 0
-        })
+        .filter(|p| *p >= EMULATOR_CONSOLE_MIN && *p <= EMULATOR_CONSOLE_MAX && p % 2 == 0)
         .collect();
 
     // Re-list AVDs at most every AVD_CACHE_TTL.
@@ -268,8 +275,12 @@ pub async fn refresh_emulators(
         let status = match &serial {
             None => "stopped".to_string(),
             Some(s) => {
-                status_for(serial_state.get(s).map(String::as_str).unwrap_or("device"), s, &sdk)
-                    .await
+                status_for(
+                    serial_state.get(s).map(String::as_str).unwrap_or("device"),
+                    s,
+                    &sdk,
+                )
+                .await
             }
         };
         entries.push(AvdEntry {
@@ -285,8 +296,12 @@ pub async fn refresh_emulators(
         if claimed.contains(s) {
             continue;
         }
-        let status =
-            status_for(serial_state.get(s).map(String::as_str).unwrap_or("device"), s, &sdk).await;
+        let status = status_for(
+            serial_state.get(s).map(String::as_str).unwrap_or("device"),
+            s,
+            &sdk,
+        )
+        .await;
         let label = avd.clone().unwrap_or_else(|| format!("{s} (unknown AVD)"));
         entries.push(AvdEntry {
             name: label,
@@ -298,7 +313,11 @@ pub async fn refresh_emulators(
 
     entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
-    EmulatorsState { sdk_path: Some(sdk_path), sdk_error: None, avds: entries }
+    EmulatorsState {
+        sdk_path: Some(sdk_path),
+        sdk_error: None,
+        avds: entries,
+    }
 }
 
 /// Error variant that still reports any running emulator devices.
@@ -343,7 +362,11 @@ async fn finish_with_error(
             }
         }
     }
-    EmulatorsState { sdk_path: Some(sdk_path), sdk_error: Some(error), avds }
+    EmulatorsState {
+        sdk_path: Some(sdk_path),
+        sdk_error: Some(error),
+        avds,
+    }
 }
 
 /// Maps an adb device state to a UI status; "device" means still booting

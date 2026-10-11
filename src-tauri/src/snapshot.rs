@@ -11,8 +11,8 @@ use serde::Serialize;
 
 use crate::android::{self, EmulatorsState};
 use crate::detect::{self, Framework};
-use crate::procs;
 use crate::ports;
+use crate::procs;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,9 +49,7 @@ fn now_ms() -> u64 {
 
 /// Builds one full snapshot. `avd_cache` throttles `emulator -list-avds` to
 /// at most once every ~15 s across poll cycles.
-pub async fn build_snapshot(
-    avd_cache: &mut Option<(std::time::Instant, Vec<String>)>,
-) -> Snapshot {
+pub async fn build_snapshot(avd_cache: &mut Option<(std::time::Instant, Vec<String>)>) -> Snapshot {
     let rows = match ports::listening_ports() {
         Ok(r) => r,
         Err(e) => {
@@ -77,7 +75,9 @@ pub async fn build_snapshot(
 
     let mut servers = Vec::new();
     for row in &rows {
-        let Some(info) = procs.get(&row.pid) else { continue };
+        let Some(info) = procs.get(&row.pid) else {
+            continue;
+        };
 
         // Project name from the process working directory.
         let (project, pkg) = match info.cwd.as_deref().map(PathBuf::from) {
@@ -86,7 +86,10 @@ pub async fn build_snapshot(
                     .entry(cwd.to_string_lossy().to_string())
                     .or_insert_with(|| detect::parse_package_meta(&cwd))
                     .clone();
-                (detect::resolve_project_name(Some(&cwd), meta.as_ref()), meta)
+                (
+                    detect::resolve_project_name(Some(&cwd), meta.as_ref()),
+                    meta,
+                )
             }
             None => ("Unknown".to_string(), None),
         };
@@ -114,5 +117,10 @@ pub async fn build_snapshot(
     let ports_list: Vec<u16> = rows.iter().map(|r| r.port).collect();
     let emulators = android::refresh_emulators(&ports_list, avd_cache).await;
 
-    Snapshot { servers, emulators, updated_at: now_ms(), error: None }
+    Snapshot {
+        servers,
+        emulators,
+        updated_at: now_ms(),
+        error: None,
+    }
 }

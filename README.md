@@ -15,6 +15,7 @@ The `Portal` file in this repository contains the architecture decisions, the se
 - It stays in the system tray. You can hide the window and show it again.
 - You can set it to start at login.
 - Filter toggles hide system noise. A second toggle shows only dev servers.
+- It checks GitHub for updates. A green banner offers a one-click install.
 
 ## System requirements
 
@@ -88,13 +89,20 @@ To stop the auto-start, clear the box again.
 
 ## Build the installers
 
-1. Run `npm run tauri build`. This builds the frontend and the backend.
-2. Find the installers in `src-tauri\target\release\bundle\`.
+Portal signs its update packages. Set the signing key first, or the build fails:
+
+1. Run this in PowerShell:
+   `$env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\derri\.tauri\portal.key"`
+2. Run `npm run tauri build`. This builds the frontend and the backend.
+3. Find the installers in `src-tauri\target\release\bundle\`.
 
 | File | Type |
 |------|------|
 | `nsis\Portal_0.1.0_x64-setup.exe` | NSIS installer |
+| `nsis\Portal_0.1.0_x64-setup.exe.sig` | Update signature |
 | `msi\Portal_0.1.0_x64_en-US.msi` | MSI package |
+
+Note: The key file is at `C:\Users\derri\.tauri\portal.key`. Keep it secret. Do not commit it. If you lose it, signed updates stop working.
 
 ## Deploy to other computers
 
@@ -105,6 +113,21 @@ To stop the auto-start, clear the box again.
 
 Note: WebView2 is the only system dependency. Windows 10 and 11 include it.
 
+## Release a new version
+
+Installed Portals check GitHub for updates on each start. The check is silent. When a newer version exists, a green banner shows at the top of the window. One click downloads, verifies the signature, and installs the update. The installer then restarts Portal.
+
+1. Bump `version` in `src-tauri\tauri.conf.json` and in `package.json`.
+2. Set the signing key: `$env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\derri\.tauri\portal.key"`.
+3. Run `npm run tauri build`.
+4. Run `node scripts/make-latest.mjs`. This writes `latest.json` next to the setup exe.
+5. Create a GitHub release with the tag `v<version>`.
+6. Upload two files to the release: the setup exe (`Portal_<version>_x64-setup.exe`) and `latest.json`.
+
+Portal then finds the update on its next start. Keep the tag and file names exact. The manifest links to them.
+
+Note: Updates work for the NSIS install. The portable exe and the MSI install cannot self-update. If the repo is private, add an auth header in `plugins > updater > endpoints` or make the release public.
+
 ## Project structure
 
 | Folder or file | Contents |
@@ -112,6 +135,8 @@ Note: WebView2 is the only system dependency. Windows 10 and 11 include it.
 | `src-tauri\src\` | The Rust backend modules |
 | `src\` | The React frontend |
 | `Portal` | The architecture document |
+| `UPDATES.md` | The update system and release guide |
+| `scripts\make-latest.mjs` | Builds the update manifest for a release |
 | `src-tauri\tauri.conf.json` | The window and bundle settings |
 
 ## Architecture summary
@@ -131,12 +156,14 @@ Note: WebView2 is the only system dependency. Windows 10 and 11 include it.
 | The restart action fails. | Portal could not read the process command line. Start the server manually. |
 | The tray icon does not show the window. | Right-click the icon and use "Show / Hide". |
 | The build fails with a linker error. | Install Visual Studio Build Tools with the Windows SDK. |
+| The build fails and asks for the signing key. | Set `TAURI_SIGNING_PRIVATE_KEY` as in "Build the installers". |
+| The update banner does not show. | No newer release exists on GitHub. Bump the version and publish a release with the two files. |
 | The frontend build fails. | Run `npm install` again. Then run the build again. |
 
 ## Safety and data
 
 - Portal needs no administrator rights.
 - Portal reads only local system tables and local files.
-- Portal sends no data to the network. The browser action opens localhost URLs only.
+- Portal sends no data to the network. The browser action opens localhost URLs only. The update check contacts `github.com` when it looks for new versions.
 - Portal writes one registry value for the start-at-login option.
 - Portal collects no telemetry.

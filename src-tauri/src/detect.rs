@@ -26,21 +26,76 @@ pub struct Framework {
 }
 
 // Brand palette — one unique color per detected runtime.
-pub const NEXT: Framework = Framework { id: "next", label: "Next.js", color: "#e4e4e7" };
-pub const REACT: Framework = Framework { id: "react", label: "React", color: "#61dafb" };
-pub const VUE: Framework = Framework { id: "vue", label: "Vue.js", color: "#42b883" };
-pub const VITE: Framework = Framework { id: "vite", label: "Vite", color: "#a78bfa" };
-pub const EXPRESS: Framework = Framework { id: "express", label: "Express.js", color: "#cbd5e1" };
-pub const FASTAPI: Framework = Framework { id: "fastapi", label: "FastAPI", color: "#009485" };
-pub const STREAMLIT: Framework = Framework { id: "streamlit", label: "Streamlit", color: "#ff4b4b" };
-pub const MLFLOW: Framework = Framework { id: "mlflow", label: "MLflow", color: "#0194e2" };
-pub const DOCKER: Framework = Framework { id: "docker", label: "Docker / WSL", color: "#2496ed" };
-pub const EMULATOR: Framework =
-    Framework { id: "emulator", label: "Android Emulator", color: "#4ade80" };
-pub const ADB: Framework = Framework { id: "adb", label: "ADB Server", color: "#3ddc84" };
-pub const NODE: Framework = Framework { id: "node", label: "Node.js", color: "#539e43" };
-pub const PYTHON: Framework = Framework { id: "python", label: "Python", color: "#ffd43b" };
-pub const OTHER: Framework = Framework { id: "other", label: "Service", color: "#71717a" };
+pub const NEXT: Framework = Framework {
+    id: "next",
+    label: "Next.js",
+    color: "#e4e4e7",
+};
+pub const REACT: Framework = Framework {
+    id: "react",
+    label: "React",
+    color: "#61dafb",
+};
+pub const VUE: Framework = Framework {
+    id: "vue",
+    label: "Vue.js",
+    color: "#42b883",
+};
+pub const VITE: Framework = Framework {
+    id: "vite",
+    label: "Vite",
+    color: "#a78bfa",
+};
+pub const EXPRESS: Framework = Framework {
+    id: "express",
+    label: "Express.js",
+    color: "#cbd5e1",
+};
+pub const FASTAPI: Framework = Framework {
+    id: "fastapi",
+    label: "FastAPI",
+    color: "#009485",
+};
+pub const STREAMLIT: Framework = Framework {
+    id: "streamlit",
+    label: "Streamlit",
+    color: "#ff4b4b",
+};
+pub const MLFLOW: Framework = Framework {
+    id: "mlflow",
+    label: "MLflow",
+    color: "#0194e2",
+};
+pub const DOCKER: Framework = Framework {
+    id: "docker",
+    label: "Docker / WSL",
+    color: "#2496ed",
+};
+pub const EMULATOR: Framework = Framework {
+    id: "emulator",
+    label: "Android Emulator",
+    color: "#4ade80",
+};
+pub const ADB: Framework = Framework {
+    id: "adb",
+    label: "ADB Server",
+    color: "#3ddc84",
+};
+pub const NODE: Framework = Framework {
+    id: "node",
+    label: "Node.js",
+    color: "#539e43",
+};
+pub const PYTHON: Framework = Framework {
+    id: "python",
+    label: "Python",
+    color: "#ffd43b",
+};
+pub const OTHER: Framework = Framework {
+    id: "other",
+    label: "Service",
+    color: "#71717a",
+};
 
 /// Detection result: which framework and what kind of row it is.
 /// `kind` drives UI affordances (`web` rows get Open/Restart buttons).
@@ -79,7 +134,10 @@ pub fn detect(i: DetectInput) -> Detected {
     // ---- Pass 1: binary identity (process / image file name only) ----
     let image = format!("{} {}", i.process_name.to_lowercase(), i.exe_file);
     if image.contains("adb") {
-        return Detected { framework: ADB, kind: "adb" };
+        return Detected {
+            framework: ADB,
+            kind: "adb",
+        };
     }
     if image.contains("com.docker")
         || image.contains("docker-proxy")
@@ -87,10 +145,16 @@ pub fn detect(i: DetectInput) -> Detected {
         || image.contains("wslrelay")
         || image.contains("wslhost")
     {
-        return Detected { framework: DOCKER, kind: "docker" };
+        return Detected {
+            framework: DOCKER,
+            kind: "docker",
+        };
     }
     if image.contains("qemu-system") {
-        return Detected { framework: EMULATOR, kind: "other" };
+        return Detected {
+            framework: EMULATOR,
+            kind: "other",
+        };
     }
 
     let is_node = i.exe_file == "node.exe" || i.exe_file == "deno.exe" || i.exe_file == "bun.exe";
@@ -103,28 +167,52 @@ pub fn detect(i: DetectInput) -> Detected {
 
     // ---- Pass 2: command-line evidence ----
     if has_word(cmd, "next") {
-        return Detected { framework: NEXT, kind: "web" };
+        return Detected {
+            framework: NEXT,
+            kind: "web",
+        };
     }
     if has_word(cmd, "react-scripts") {
-        return Detected { framework: REACT, kind: "web" };
+        return Detected {
+            framework: REACT,
+            kind: "web",
+        };
     }
     if has_word(cmd, "vite") {
-        return Detected { framework: vite_flavor(i.package), kind: "web" };
+        return Detected {
+            framework: vite_flavor(i.package),
+            kind: "web",
+        };
     }
     if has_word(cmd, "nuxt") || has_word(cmd, "vue") {
-        return Detected { framework: VUE, kind: "web" };
+        return Detected {
+            framework: VUE,
+            kind: "web",
+        };
     }
     if has_word(cmd, "express") {
-        return Detected { framework: EXPRESS, kind: "web" };
+        return Detected {
+            framework: EXPRESS,
+            kind: "web",
+        };
     }
     if has_word(cmd, "streamlit") {
-        return Detected { framework: STREAMLIT, kind: "web" };
+        return Detected {
+            framework: STREAMLIT,
+            kind: "web",
+        };
     }
     if has_word(cmd, "mlflow") {
-        return Detected { framework: MLFLOW, kind: "web" };
+        return Detected {
+            framework: MLFLOW,
+            kind: "web",
+        };
     }
     if has_word(cmd, "uvicorn") || has_word(cmd, "fastapi") {
-        return Detected { framework: FASTAPI, kind: "web" };
+        return Detected {
+            framework: FASTAPI,
+            kind: "web",
+        };
     }
 
     // ---- Pass 3: dependency evidence (node servers with a package.json) ----
@@ -132,44 +220,80 @@ pub fn detect(i: DetectInput) -> Detected {
         if let Some(pkg) = i.package {
             let deps = &pkg.deps;
             if deps.contains("next") {
-                return Detected { framework: NEXT, kind: "web" };
+                return Detected {
+                    framework: NEXT,
+                    kind: "web",
+                };
             }
             if deps.contains("react-scripts") {
-                return Detected { framework: REACT, kind: "web" };
+                return Detected {
+                    framework: REACT,
+                    kind: "web",
+                };
             }
             if deps.contains("nuxt") || deps.contains("vue") {
-                return Detected { framework: VUE, kind: "web" };
+                return Detected {
+                    framework: VUE,
+                    kind: "web",
+                };
             }
             if deps.contains("express") {
-                return Detected { framework: EXPRESS, kind: "web" };
+                return Detected {
+                    framework: EXPRESS,
+                    kind: "web",
+                };
             }
             if deps.contains("vite") {
-                return Detected { framework: vite_flavor(i.package), kind: "web" };
+                return Detected {
+                    framework: vite_flavor(i.package),
+                    kind: "web",
+                };
             }
             if deps.contains("fastapi") || deps.contains("uvicorn") {
-                return Detected { framework: FASTAPI, kind: "web" };
+                return Detected {
+                    framework: FASTAPI,
+                    kind: "web",
+                };
             }
             if deps.contains("streamlit") {
-                return Detected { framework: STREAMLIT, kind: "web" };
+                return Detected {
+                    framework: STREAMLIT,
+                    kind: "web",
+                };
             }
             if deps.contains("mlflow") {
-                return Detected { framework: MLFLOW, kind: "web" };
+                return Detected {
+                    framework: MLFLOW,
+                    kind: "web",
+                };
             }
         }
     }
 
     // ---- Pass 4: generic runtimes and system services ----
     if is_node {
-        return Detected { framework: NODE, kind: "web" };
+        return Detected {
+            framework: NODE,
+            kind: "web",
+        };
     }
     if is_python {
-        return Detected { framework: PYTHON, kind: "web" };
+        return Detected {
+            framework: PYTHON,
+            kind: "web",
+        };
     }
     if is_system_image(i.exe_file) {
-        return Detected { framework: OTHER, kind: "system" };
+        return Detected {
+            framework: OTHER,
+            kind: "system",
+        };
     }
 
-    Detected { framework: OTHER, kind: "other" }
+    Detected {
+        framework: OTHER,
+        kind: "other",
+    }
 }
 
 /// `vite` is a bundler, not a framework — use package.json dependencies to
@@ -190,14 +314,40 @@ fn vite_flavor(pkg: Option<&PackageMeta>) -> Framework {
 pub fn is_system_image(exe_file: &str) -> bool {
     matches!(
         exe_file,
-        "system" | "registry" | "memcompression" | "smss.exe" | "csrss.exe" | "wininit.exe"
-            | "winlogon.exe" | "services.exe" | "lsass.exe" | "lsaiso.exe" | "svchost.exe"
-            | "dwm.exe" | "explorer.exe" | "fontdrvhost.exe" | "sihost.exe" | "taskhostw.exe"
-            | "runtimebroker.exe" | "searchhost.exe" | "startmenuexperiencehost.exe"
-            | "textinputhost.exe" | "shellexperiencehost.exe" | "msmpeng.exe"
-            | "securityhealthservice.exe" | "securityhealthsystray.exe" | "spoolsv.exe"
-            | "smartscreen.exe" | "dllhost.exe" | "audiodg.exe" | "wudfhost.exe"
-            | "conhost.exe" | "cmd.exe" | "sgrmbroker.exe" | "tabtip.exe" | "ctfmon.exe"
+        "system"
+            | "registry"
+            | "memcompression"
+            | "smss.exe"
+            | "csrss.exe"
+            | "wininit.exe"
+            | "winlogon.exe"
+            | "services.exe"
+            | "lsass.exe"
+            | "lsaiso.exe"
+            | "svchost.exe"
+            | "dwm.exe"
+            | "explorer.exe"
+            | "fontdrvhost.exe"
+            | "sihost.exe"
+            | "taskhostw.exe"
+            | "runtimebroker.exe"
+            | "searchhost.exe"
+            | "startmenuexperiencehost.exe"
+            | "textinputhost.exe"
+            | "shellexperiencehost.exe"
+            | "msmpeng.exe"
+            | "securityhealthservice.exe"
+            | "securityhealthsystray.exe"
+            | "spoolsv.exe"
+            | "smartscreen.exe"
+            | "dllhost.exe"
+            | "audiodg.exe"
+            | "wudfhost.exe"
+            | "conhost.exe"
+            | "cmd.exe"
+            | "sgrmbroker.exe"
+            | "tabtip.exe"
+            | "ctfmon.exe"
     )
 }
 
@@ -322,5 +472,9 @@ fn uv_lock_name(dir: &Path) -> Option<String> {
 fn toml_name_value(line: &str) -> Option<String> {
     let rest = line.strip_prefix("name")?.trim_start().strip_prefix('=')?;
     let val = rest.trim().trim_matches('"').trim_matches('\'');
-    if val.is_empty() { None } else { Some(val.to_string()) }
+    if val.is_empty() {
+        None
+    } else {
+        Some(val.to_string())
+    }
 }

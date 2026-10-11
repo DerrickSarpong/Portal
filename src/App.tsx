@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { check } from "@tauri-apps/plugin-updater";
+import type { Update } from "@tauri-apps/plugin-updater";
 import type { AvdEntry, ServerEntry, Snapshot } from "./types";
 
 const EMPTY: Snapshot = {
@@ -43,6 +45,7 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [autostart, setAutostart] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [update, setUpdate] = useState<Update | null>(null);
 
   // Initial snapshot + live updates from the Rust poller (every 4 s).
   useEffect(() => {
@@ -78,6 +81,20 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Silent update check on startup. Errors (no release published yet,
+  // offline) are ignored — the banner simply never appears.
+  useEffect(() => {
+    let disposed = false;
+    check()
+      .then((u) => {
+        if (!disposed && u) setUpdate(u);
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
   const run = useCallback(
     async (key: string, okMsg: string, action: () => Promise<unknown>) => {
       setBusy(key);
@@ -107,6 +124,24 @@ export default function App() {
     run(`kill:${s.pid}`, `Killed ${s.project}`, () =>
       invoke("kill_server", { pid: s.pid }),
     );
+
+  // One-click update: download, verify signature, run the NSIS installer.
+  // Windows: the installer exits this app and relaunches it, so there is
+  // nothing to do after downloadAndInstall resolves — on failure, un-busy.
+  const installUpdate = async () => {
+    if (!update) return;
+    setBusy("update");
+    try {
+      await update.downloadAndInstall((e) => {
+        if (e.event === "Started" && e.data.contentLength) {
+          setToast(`Downloading update (${(e.data.contentLength / 1e6).toFixed(1)} MB)…`);
+        }
+      });
+    } catch (err) {
+      setToast(String(err));
+      setBusy(null);
+    }
+  };
 
   const launchAvd = (a: AvdEntry, cold: boolean) =>
     run(`avd:${a.name}:${cold}`, cold ? `Cold-booting ${a.name}` : `Booting ${a.name}`, () =>
@@ -184,6 +219,21 @@ export default function App() {
           &#10005;
         </button>
       </header>
+
+      {/* Update banner — shown when the updater finds a newer release */}
+      {update && (
+        <button
+          onClick={installUpdate}
+          disabled={busy === "update"}
+          title={`Install v${update.version} and restart (running v${update.currentVersion})`}
+          className="flex w-full items-center justify-center gap-1.5 bg-emerald-500/15 px-3 py-1.5 text-[11px] text-emerald-300 transition-colors hover:bg-emerald-500/25 disabled:animate-pulse disabled:hover:bg-emerald-500/15"
+        >
+          <DownloadIcon />
+          {busy === "update"
+            ? "Downloading update…"
+            : `Update v${update.version} available — click to install`}
+        </button>
+      )}
 
       {/* Tabs */}
       <nav className="flex items-center gap-1 px-2 pt-2">
@@ -579,6 +629,25 @@ function StopIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
       <rect x="6" y="6" width="12" height="12" rx="1" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   );
 }

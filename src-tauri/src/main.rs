@@ -39,6 +39,7 @@ pub struct TrayMenu {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             latest: std::sync::Mutex::new(None),
             avd_cache: tokio::sync::Mutex::new(None),
@@ -132,7 +133,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let quit = MenuItem::with_id(app, "quit", "Quit Portal", true, None::<&str>)?;
-    let menu = MenuBuilder::new(app).items(&[&toggle, &autostart, &quit]).build()?;
+    let menu = MenuBuilder::new(app)
+        .items(&[&toggle, &autostart, &quit])
+        .build()?;
 
     let mut builder = TrayIconBuilder::with_id("portal-tray")
         .menu(&menu)

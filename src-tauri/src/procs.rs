@@ -63,7 +63,11 @@ pub fn snapshot_processes() -> HashMap<u32, ProcessInfo> {
                 parent_pid: process.parent().map(|p| p.as_u32()),
                 name: process.name().to_string_lossy().to_string(),
                 exe: process.exe().map(|p| p.to_string_lossy().to_string()),
-                cmdline: if joined.is_empty() { None } else { Some(joined) },
+                cmdline: if joined.is_empty() {
+                    None
+                } else {
+                    Some(joined)
+                },
                 cwd: None,
             },
         );
@@ -75,7 +79,9 @@ pub fn snapshot_processes() -> HashMap<u32, ProcessInfo> {
 /// Quietly skips PIDs that cannot be opened (system processes, other users).
 pub fn enrich_with_peb(procs: &mut HashMap<u32, ProcessInfo>, pids: &[u32]) {
     for pid in pids {
-        let Some(info) = procs.get_mut(pid) else { continue };
+        let Some(info) = procs.get_mut(pid) else {
+            continue;
+        };
         let need_cwd = info.cwd.is_none();
         let need_cmd = info.cmdline.is_none();
         if !need_cwd && !need_cmd {
@@ -188,7 +194,11 @@ mod peb {
         .ok()?;
         let s = String::from_utf16_lossy(&buf[..bytes / 2]);
         let trimmed = s.trim_end_matches('\0').trim().to_string();
-        if trimmed.is_empty() { None } else { Some(trimmed) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
     }
 
     /// Reads (cwd, cmdline) from a process PEB. Works for same-user processes
@@ -242,8 +252,12 @@ mod peb {
         }
 
         // 3. ProcessParameters → CurrentDirectory.DosPath and CommandLine.
-        let mut dos_path =
-            UnicodeString { length: 0, maximum_length: 0, _pad: 0, buffer: std::ptr::null_mut() };
+        let mut dos_path = UnicodeString {
+            length: 0,
+            maximum_length: 0,
+            _pad: 0,
+            buffer: std::ptr::null_mut(),
+        };
         read_mem(
             handle,
             (params + UPP_OFF_CURRENT_DIRECTORY) as *const core::ffi::c_void,
@@ -253,8 +267,12 @@ mod peb {
         .ok()?;
         let cwd = read_unicode_string(handle, &dos_path);
 
-        let mut cmd =
-            UnicodeString { length: 0, maximum_length: 0, _pad: 0, buffer: std::ptr::null_mut() };
+        let mut cmd = UnicodeString {
+            length: 0,
+            maximum_length: 0,
+            _pad: 0,
+            buffer: std::ptr::null_mut(),
+        };
         read_mem(
             handle,
             (params + UPP_OFF_COMMAND_LINE) as *const core::ffi::c_void,

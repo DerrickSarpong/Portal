@@ -10,3 +10,7 @@ src-tauri/gen/
 .vscode/
 .idea/
 *.log
+
+# Config
+.env
+UPDATES.md

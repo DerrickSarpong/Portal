@@ -7,9 +7,9 @@
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW,
-    RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE,
-    REG_OPTION_NON_VOLATILE, REG_SZ, REG_VALUE_TYPE,
+    RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
+    HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SZ,
+    REG_VALUE_TYPE,
 };
 
 use crate::util;
@@ -21,7 +21,11 @@ const VALUE_NAME: &str = "Portal";
 fn open_key(write: bool) -> Result<HKEY, String> {
     let subkey = util::wide(RUN_KEY);
     let mut hk: HKEY = HKEY::default();
-    let access = if write { KEY_SET_VALUE | KEY_QUERY_VALUE } else { KEY_QUERY_VALUE };
+    let access = if write {
+        KEY_SET_VALUE | KEY_QUERY_VALUE
+    } else {
+        KEY_QUERY_VALUE
+    };
 
     let err = unsafe {
         RegOpenKeyExW(
@@ -59,7 +63,9 @@ fn open_key(write: bool) -> Result<HKEY, String> {
 
 /// Is the autostart entry present and sane?
 pub fn is_enabled() -> bool {
-    let Ok(hk) = open_key(false) else { return false };
+    let Ok(hk) = open_key(false) else {
+        return false;
+    };
     let name = util::wide(VALUE_NAME);
     let mut buf = [0u16; 520]; // up to a 519-char path
     let mut size = (buf.len() * 2) as u32;
@@ -93,8 +99,7 @@ pub fn set_enabled(enable: bool) -> Result<(), String> {
                     let data = format!("\"{}\"", exe.display());
                     // REG_SZ is UTF-16LE; RegSetValueExW takes the data as a byte slice.
                     let w: Vec<u16> = data.encode_utf16().chain([0]).collect();
-                    let bytes: Vec<u8> =
-                        w.iter().flat_map(|v| v.to_ne_bytes()).collect();
+                    let bytes: Vec<u8> = w.iter().flat_map(|v| v.to_ne_bytes()).collect();
                     let err = RegSetValueExW(
                         hk,
                         PCWSTR::from_raw(name.as_ptr()),

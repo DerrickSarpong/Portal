@@ -40,7 +40,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGRUFCRkQwNEI3MUQxNjAKUldSZzBYRkwwTC9xejVQS242MjNoVWdwN1IvV3ZaY3pXNCtjVDdwVTNjTTdwWTNDQmpwdUxYOEEK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlCRjE0ODE5M0I3RkVGMUMKUldRYzczODdHVWp4bXo2bGMrTENNQ1g1RkZySExiQ2dibjhFaWhRWkhOWVJCOWt2RDJjQmhuTkIK",
       "endpoints": [
         "https://github.com/DerrickSarpong/Portal/releases/latest/download/latest.json"
       ],

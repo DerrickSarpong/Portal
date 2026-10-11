@@ -91,8 +91,11 @@ To stop the auto-start, clear the box again.
 
 Portal signs its update packages. Set the signing key first, or the build fails:
 
-1. Run this in PowerShell:
-   `$env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\derri\.tauri\portal.key"`
+1. Run this in PowerShell. Use the key password you chose when you generated the key:
+   ```powershell
+   $env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\derri\.tauri\portal.key"
+   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "YOUR-PASSWORD"
+   ```
 2. Run `npm run tauri build`. This builds the frontend and the backend.
 3. Find the installers in `src-tauri\target\release\bundle\`.
 
@@ -118,7 +121,7 @@ Note: WebView2 is the only system dependency. Windows 10 and 11 include it.
 Installed Portals check GitHub for updates on each start. The check is silent. When a newer version exists, a green banner shows at the top of the window. One click downloads, verifies the signature, and installs the update. The installer then restarts Portal.
 
 1. Bump `version` in `src-tauri\tauri.conf.json` and in `package.json`.
-2. Set the signing key: `$env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\derri\.tauri\portal.key"`.
+2. Set both signing variables as in "Build the installers" (key path and key password).
 3. Run `npm run tauri build`.
 4. Run `node scripts/make-latest.mjs`. This writes `latest.json` next to the setup exe.
 5. Create a GitHub release with the tag `v<version>`.
